@@ -233,9 +233,9 @@ test.describe('Dashboard', () => {
     const registerURL = 'https://rahulshettyacademy.com/client/#/auth/register';
     const dashboardURL = 'https://rahulshettyacademy.com/client/#/dashboard/dash';
 
-    test.beforeAll(async ({ page }) => {
+    test.beforeEach(async ({ page }) => {
         // Create a new account to use for dashboard tests
-        const firstName : string= 'John';
+        const firstName : string = 'John';
         const lastName : string = 'Doe';
         const password : string = 'SecurePassword123!';
         const email : string= `johndoe${Date.now()}@example.com`; 
@@ -267,10 +267,46 @@ test.describe('Dashboard', () => {
         await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/dash');
     });
 
-    test('Dashboard - Verify website items', async ({ page }) => {
-        await page.goto(dashboardURL);
-
+    test('Dashboard - Verify Home Page', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
         
+        const items : any = page.locator('.card-body');
+        const itemCount : number = await items.count();
+        let results : any = await page.locator('#res').textContent();
+        let resultsCount : number = parseInt(results.trim().slice(7, -1)); // Extract the number from "Showing X items"
+
+        expect(itemCount).toBeGreaterThan(0); // Ensure there are items displayed
+        expect(resultsCount).toBe(itemCount); // Ensure the results count matches the number of items displayed
+        await expect(items.locator('h5')).toHaveCount(itemCount); // Ensure each item has a title
+
+        for(let i = 0; i < itemCount; i++) {
+            await expect(items.getByRole('button', { name: 'View' }).nth(i)).toBeVisible(); // Ensure each item has a "View" button
+            await expect(items.getByRole('button', { name: "Add To Cart" }).nth(i)).toBeVisible(); // Ensure each item has an "Add To Cart" button
+        } 
+    });
+
+    test('Dashboard - Verify Adding Item to Cart', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+        
+        await page.getByRole('button', { name: "Add To Cart" }).first().click();
+        await expect(page.getByText("Product Added To Cart")).toBeVisible();
+    });
+
+    test('Dashboard - Verify Cart and Checkout', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+        
+        await page.getByRole('button', { name: "Add To Cart" }).first().click();
+        await expect(page.getByText("Product Added To Cart")).toBeVisible();
+
+        await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
+        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/cart');
+        // await page.getByRole('button', { name: "Checkout" }).click();
+    });
+
+    test('Dashboard - Verify Order History', async ({ page }) => {
+
+        await page.getByRole('button', { name: "Orders" }).click();
+        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/myorders');
     });
 });
 
