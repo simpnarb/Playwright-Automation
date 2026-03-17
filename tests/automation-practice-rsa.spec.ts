@@ -232,13 +232,13 @@ test.describe('Dashboard', () => {
     const loginURL = 'https://rahulshettyacademy.com/client/#/auth/login';
     const registerURL = 'https://rahulshettyacademy.com/client/#/auth/register';
     const dashboardURL = 'https://rahulshettyacademy.com/client/#/dashboard/dash';
+    const email : string = `johndoe${Date.now()}@example.com`;
 
     test.beforeEach(async ({ page }) => {
         // Create a new account to use for dashboard tests
         const firstName : string = 'John';
         const lastName : string = 'Doe';
-        const password : string = 'SecurePassword123!';
-        const email : string= `johndoe${Date.now()}@example.com`; 
+        const password : string = 'SecurePassword123!'; 
         const mobileNumber : string = '1234567890';
         const occupation : string = 'Engineer';
 
@@ -285,28 +285,218 @@ test.describe('Dashboard', () => {
         } 
     });
 
+    test('Dashboard - Verify Product Details', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+
+        await page.getByRole('button', { name: 'View' }).first().click();
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        
+        const productID : string = page.url().slice(-24);
+        expect (productID.length).toBe(24); // Ensure the product ID in the URL is 24 characters long
+        expect (productID).toMatch(/^[a-zA-Z0-9]+$/); // Ensure the product ID contains only alphanumeric characters
+    });
+
+    test('Dashboard - Verify blank Cart', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+        await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
+        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/cart');
+        await expect(page.getByText("No Products in Your Cart !")).toBeVisible(); // Ensure the cart is empty
+    });
+
     test('Dashboard - Verify Adding Item to Cart', async ({ page }) => {
         await page.locator('.card-body').last().waitFor();
         
+        await page.getByRole('button', { name: 'View' }).first().click();
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        
+        const productID : string = '#' + page.url().slice(-24);
         await page.getByRole('button', { name: "Add To Cart" }).first().click();
         await expect(page.getByText("Product Added To Cart")).toBeVisible();
+
+        await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
+        await expect(page.locator('.itemNumber')).toHaveText(productID); // Ensure the cart shows the item added
     });
 
     test('Dashboard - Verify Cart and Checkout', async ({ page }) => {
         await page.locator('.card-body').last().waitFor();
+
+        await page.getByRole('button', { name: 'View' }).first().click();
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        
+        const productID : string = page.url().slice(-24);
         
         await page.getByRole('button', { name: "Add To Cart" }).first().click();
         await expect(page.getByText("Product Added To Cart")).toBeVisible();
 
         await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
         await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/cart');
-        // await page.getByRole('button', { name: "Checkout" }).click();
+        await expect(page.getByText("No Products in Your Cart !")).not.toBeVisible(); // Ensure the cart is not empty
+        await expect(page.locator('.itemNumber')).toHaveText("#" + productID); // Ensure the cart shows the item added
+        await page.getByRole('button', { name: "Checkout" }).click();
+
+        await page.locator('div > input').first().clear();
+        const creditCardInput = Math.floor(Math.random() * 9000000000000000) + 1000000000000000; // Generate a random 16-digit credit card number
+        await page.locator('div > input').first().fill(creditCardInput.toString());
+
+        const expiryMonth = Math.floor(Math.random() * 12) + 1; // Generate a random month between 1 and 12
+        const expiryYear = (Math.floor(Math.random() * 31) + 1); // Generate a random year between 1 and 31
+        
+        if (expiryYear < 10) {
+            let cardYear = expiryYear.toString().padStart(2, '0'); // Add leading zero for single-digit years
+            await page.locator("select[class*='input ddl']").last().selectOption(cardYear);
+        }else if (expiryMonth < 10) {
+            const cardMonth = expiryMonth.toString().padStart(2, '0'); // Add leading zero for single-digit months
+            await page.locator("select[class*='input ddl']").first().selectOption(cardMonth);
+        }else{
+            await page.locator("select[class*='input ddl']").first().selectOption(expiryMonth.toString());
+            await page.locator("select[class*='input ddl']").last().selectOption(expiryYear.toString());
+        }
+
+        await page.getByText("Place Order").click()
+        await expect(page.getByText("Please Enter Full Shipping Information")).toBeVisible(); // Ensure the appropriate error message is displayed for missing shipping information
+        await page.getByRole('button', { name: "Apply Coupon" }).click()
+        await expect(page.getByText("Please Enter Coupon")).toBeVisible(); // Ensure the appropriate error message is displayed for missing coupon code
+
+        await page.locator('div > input').nth(1).fill("111");
+        await page.locator('div > input').nth(2).fill("John Pork");
+        await page.locator('div > input').nth(3).fill("Coupon1");
+        await page.getByRole('button', { name: "Apply Coupon" }).click()
+        await expect(page.getByText("* Invalid Coupon")).toBeVisible(); // Ensure the appropriate error message is displayed for invalid coupon code
+        await page.locator('div > input').nth(3).clear();
+        await page.locator('div > input').nth(3).fill("rahulshettyacademy");
+        await page.getByRole('button', { name: "Apply Coupon" }).click()
+        await expect(page.getByText("* Coupon Applied")).toBeVisible(); // Ensure the appropriate error message is displayed for invalid coupon code
+        await page.locator('div > input').nth(4).fill("sean@testing.com");
+        await expect(page.locator("label[type='text']")).toHaveText("sean@testing.com"); // Ensure the email input field label is in sync with user input 
+        await page.locator("input[placeholder='Select Country']").pressSequentially("United States", {delay: 200});
+        await page.getByRole('button', { name: "United States"}).first().click(); // Ensure the country dropdown is working and the correct country can be selected
+
+        await page.getByText("Place Order").click()
     });
 
+    test('Dashboard - Verify Order Details', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+
+        await page.getByRole('button', { name: 'View' }).first().click();
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        
+        const productID : string = page.url().slice(-24);
+        
+        await page.getByRole('button', { name: "Add To Cart" }).first().click();
+        await expect(page.getByText("Product Added To Cart")).toBeVisible();
+
+        await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
+        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/cart');
+        await expect(page.getByText("No Products in Your Cart !")).not.toBeVisible(); // Ensure the cart is not empty
+        await expect(page.locator('.itemNumber')).toHaveText("#" + productID); // Ensure the cart shows the item added
+        await page.getByRole('button', { name: "Checkout" }).click();
+
+        await page.locator('div > input').first().clear();
+        const creditCardInput = Math.floor(Math.random() * 9000000000000000) + 1000000000000000; // Generate a random 16-digit credit card number
+        await page.locator('div > input').first().fill(creditCardInput.toString());
+
+        const expiryMonth = Math.floor(Math.random() * 12) + 1; // Generate a random month between 1 and 12
+        const expiryYear = (Math.floor(Math.random() * 31) + 1); // Generate a random year between 1 and 31
+        
+        if (expiryYear < 10) {
+            let cardYear = expiryYear.toString().padStart(2, '0'); // Add leading zero for single-digit years
+            await page.locator("select[class*='input ddl']").last().selectOption(cardYear);
+        }else if (expiryMonth < 10) {
+            const cardMonth = expiryMonth.toString().padStart(2, '0'); // Add leading zero for single-digit months
+            await page.locator("select[class*='input ddl']").first().selectOption(cardMonth);
+        }else{
+            await page.locator("select[class*='input ddl']").first().selectOption(expiryMonth.toString());
+            await page.locator("select[class*='input ddl']").last().selectOption(expiryYear.toString());
+        }
+
+        await page.locator('div > input').nth(1).fill("111");
+        await page.locator('div > input').nth(2).fill("John Pork");
+        await page.locator('div > input').nth(3).fill("rahulshettyacademy");
+        await page.getByRole('button', { name: "Apply Coupon" }).click()
+        await expect(page.getByText("* Coupon Applied")).toBeVisible();
+        await page.locator('div > input').nth(4).fill("sean@testing.com");
+        await page.locator("input[placeholder='Select Country']").pressSequentially("United States", {delay: 200});
+        await page.getByRole('button', { name: "United States"}).first().click(); // Ensure the country dropdown is working and the correct country can be selected
+
+        await page.getByText("Place Order").click()
+
+        await expect(page.getByText(" Thankyou for the order. ")).toBeVisible();
+        const recentOrder : any = await page.locator("label[class='ng-star-inserted']").textContent();
+        const recentOrderID : string = recentOrder.replaceAll("|","").trim();
+        await expect(page).toHaveURL("https://rahulshettyacademy.com/client/#/dashboard/thanks?prop=%5B%22" + recentOrderID + "%22%5D");
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        await expect(page.getByText('$ 11500 ')).toBeVisible();
+    });
+    
     test('Dashboard - Verify Order History', async ({ page }) => {
+        await page.locator('.card-body').last().waitFor();
+
+        await page.getByRole('button', { name: 'View' }).first().click();
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        
+        const productID : string = page.url().slice(-24);
+        
+        await page.getByRole('button', { name: "Add To Cart" }).first().click();
+        await expect(page.getByText("Product Added To Cart")).toBeVisible();
+
+        await page.locator(".btn.btn-custom[routerlink='/dashboard/cart']").click();
+        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/cart');
+        await expect(page.getByText("No Products in Your Cart !")).not.toBeVisible(); // Ensure the cart is not empty
+        await expect(page.locator('.itemNumber')).toHaveText("#" + productID); // Ensure the cart shows the item added
+        await page.getByRole('button', { name: "Checkout" }).click();
+
+        await page.locator('div > input').first().clear();
+        const creditCardInput = Math.floor(Math.random() * 9000000000000000) + 1000000000000000; // Generate a random 16-digit credit card number
+        await page.locator('div > input').first().fill(creditCardInput.toString());
+
+        const expiryMonth = Math.floor(Math.random() * 12) + 1; // Generate a random month between 1 and 12
+        const expiryYear = (Math.floor(Math.random() * 31) + 1); // Generate a random year between 1 and 31
+        
+        if (expiryYear < 10) {
+            let cardYear = expiryYear.toString().padStart(2, '0'); // Add leading zero for single-digit years
+            await page.locator("select[class*='input ddl']").last().selectOption(cardYear);
+        }else if (expiryMonth < 10) {
+            const cardMonth = expiryMonth.toString().padStart(2, '0'); // Add leading zero for single-digit months
+            await page.locator("select[class*='input ddl']").first().selectOption(cardMonth);
+        }else{
+            await page.locator("select[class*='input ddl']").first().selectOption(expiryMonth.toString());
+            await page.locator("select[class*='input ddl']").last().selectOption(expiryYear.toString());
+        }
+
+        await page.locator('div > input').nth(1).fill("111");
+        await page.locator('div > input').nth(2).fill("John Pork");
+        await page.locator('div > input').nth(3).fill("rahulshettyacademy");
+        await page.getByRole('button', { name: "Apply Coupon" }).click()
+        await expect(page.getByText("* Coupon Applied")).toBeVisible();
+        await page.locator('div > input').nth(4).fill("sean@testing.com");
+        await page.locator("input[placeholder='Select Country']").pressSequentially("United States", {delay: 200});
+        await page.getByRole('button', { name: "United States"}).first().click(); // Ensure the country dropdown is working and the correct country can be selected
+
+        await page.getByText("Place Order").click()
+
+        await expect(page.getByText(" Thankyou for the order. ")).toBeVisible();
+        const recentOrder : any = await page.locator("label[class='ng-star-inserted']").textContent();
+        const recentOrderID : string = recentOrder.replaceAll("|","").trim();
+        await expect(page).toHaveURL("https://rahulshettyacademy.com/client/#/dashboard/thanks?prop=%5B%22" + recentOrderID + "%22%5D");
+        await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+        await expect(page.getByText('$ 11500 ')).toBeVisible();
+
 
         await page.getByRole('button', { name: "Orders" }).click();
         await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/myorders');
+
+        await page.locator("tbody tr").last().waitFor();
+        const orderCount : any = await page.locator("tbody tr").count();
+        for (let i=0; i < orderCount; i++) {
+            const orderID : any = await page.locator("tbody tr").nth(i).locator("th").textContent();
+            if (orderID.trim() === recentOrderID) {
+                await page.locator("tbody tr").nth(i).getByRole('button', { name: "View" }).click();
+                await expect(page.getByText(email)).toHaveCount(2);
+                await expect(page.getByText('ADIDAS ORIGINAL')).toBeVisible();
+                await expect(page.getByText('$ 11500 ')).toBeVisible();
+                break;
+            }
+        }
     });
 });
 
