@@ -6,12 +6,11 @@
     4. Creating an account
     5. Logging in with the created account
 */
-import { test, expect, type Locator} from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 import { RegistrationPage } from '../fixtures/registration-page';
 import { LoginPage } from '../fixtures/login-page';
 import { PlaceOrderPage } from '../fixtures/placeOrder-page';
 import { DashboardPage } from '../fixtures/dashboard-page';
-import { log } from 'console';
 
 test.describe('Account Creation and Login', () => {
     const baseURL : string= 'https://rahulshettyacademy.com/client/#/auth/login';
@@ -201,31 +200,48 @@ test.describe('Dashboard', () => {
     const registerURL = 'https://rahulshettyacademy.com/client/#/auth/register';
     const dashboardURL = 'https://rahulshettyacademy.com/client/#/dashboard/dash';
     const email : string = `johndoe${Date.now()}@example.com`;
+    let token : string;
 
-    test.beforeEach(async ({ page }) => {
-        // Create a new account to use for dashboard tests
+    test.beforeAll(async() => {
+        const apiContext = await request.newContext();
         const firstName : string = 'John';
         const lastName : string = 'Doe';
         const password : string = 'SecurePassword123!'; 
         const mobileNumber : string = '1234567890';
         const occupation : string = 'Engineer';
         const gender : string = 'Female';
-        const registerPage = new RegistrationPage(page);
+        const registerPayload = {
+            confirmPassword: password,
+            firstName: firstName,
+            gender: gender,
+            lastName: lastName,
+            occupation: occupation,
+            required: true,
+            userEmail: email,
+            userMobile: mobileNumber,
+            userPassword: password,
+            userRole: "customer"
+        };
+        const loginPayload = {
+            userEmail: email,
+            userPassword: password
+        };
 
-        await page.goto(registerURL);
+        const apiRegisterResponse = await apiContext.post('https://rahulshettyacademy.com/api/ecom/auth/register', { data: registerPayload });
+        expect(apiRegisterResponse.ok()).toBeTruthy();
 
-        await registerPage.fillRegistrationForm(firstName, lastName, mobileNumber, email, password, password, occupation, gender);
-        await registerPage.pressRegisterButton();
+        const apiLoginResponse = await apiContext.post('https://rahulshettyacademy.com/api/ecom/auth/login', { data: loginPayload });
+        expect(apiLoginResponse.ok()).toBeTruthy();
+        const loginResponseBody : any = await apiLoginResponse.json();
+        token = loginResponseBody.token;
+    });
 
-        // Verify account creation success (assuming a success message appears)
-        //await expect(page.getByText('Account Created Successfully')).toBeVisible();
-        await page.getByRole('button', { name: 'Login' }).click();
-
-        // Log in with the newly created account
-        await page.locator('#userEmail').fill(email);
-        await page.locator('#userPassword').fill(password);
-        await page.getByRole('button', { name: 'Login' }).click();
-        await expect(page).toHaveURL('https://rahulshettyacademy.com/client/#/dashboard/dash');
+    test.beforeEach(async ({ page }) => {
+        // Set the token in local storage to bypass the login UI and directly access the dashboard
+        await page.addInitScript(token => {
+            window.localStorage.setItem('token', token);
+        }, token);
+        await page.goto(dashboardURL);
     });
 
     test('Dashboard - Verify Home Page', async ({ page }) => {
